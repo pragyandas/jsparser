@@ -1,6 +1,6 @@
 "use strict";
 
-(function(parser) {
+module.exports = function(parser) {
 	var ast = parser.ast;
 
 	ast.ProgramNode.prototype.print = function(indent, indentChar) {
@@ -496,4 +496,4 @@
 	ast.LiteralNode.prototype.print = function(indent, indentChar) {
 		return this.value;
 	};
-})(ecmascript);
+};

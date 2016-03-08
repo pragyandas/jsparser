@@ -44,7 +44,7 @@ RegularExpressionLiteral {RegularExpressionBody}\/{RegularExpressionFlags}
 <REGEXP>{RegularExpressionLiteral} %{
                                         this.begin("INITIAL");
                                         return "REGEXP_LITERAL";
-                                   %}
+                                   %}                           
 (\r\n|\r|\n)+\s*"++"               return "BR++"; /* Handle restricted postfix production */
 (\r\n|\r|\n)+\s*"--"               return "BR--"; /* Handle restricted postfix production */
 \s+                                %{
@@ -117,6 +117,8 @@ RegularExpressionLiteral {RegularExpressionBody}\/{RegularExpressionFlags}
 "extends"                          return "EXTENDS";
 "import"                           return "IMPORT";
 "super"                            return "SUPER";
+"@m"                               return "@M";
+"where"                            return "@W";
 {Identifier}                       parser.restricted = false; return "IDENTIFIER";
 {DecimalLiteral}                   parser.restricted = false; return "NUMERIC_LITERAL";
 {HexIntegerLiteral}                parser.restricted = false; return "NUMERIC_LITERAL";
@@ -178,10 +180,10 @@ RegularExpressionLiteral {RegularExpressionBody}\/{RegularExpressionFlags}
 var _originalLexMethod = lexer.lex;
 
 lexer.lex = function() {
-	parser.wasNewLine = parser.newLine;
-	parser.newLine = false;
+    parser.wasNewLine = parser.newLine;
+    parser.newLine = false;
 
-	return _originalLexMethod.call(this);
+    return _originalLexMethod.call(this);
 };
 /* End Lexer Customization Methods */
 
@@ -559,30 +561,30 @@ DebuggerStatement
 FunctionDeclaration
     : "FUNCTION" "IDENTIFIER" "(" ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionDeclarationNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), [], $6, false, false, createSourceLocation(null, @1, @7));
+        $$ = new FunctionDeclarationNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), [], $6, false, false, createSourceLocation(null, @1, @7));
         }
     | "FUNCTION" "IDENTIFIER" "(" FormalParameterList ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionDeclarationNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), $4, $7, false, false, createSourceLocation(null, @1, @8));
+        $$ = new FunctionDeclarationNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), $4, $7, false, false, createSourceLocation(null, @1, @8));
         }
     ;
 
 FunctionExpression
     : "FUNCTION" "IDENTIFIER" "(" ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionExpressionNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), [], $6, false, false, createSourceLocation(null, @1, @7));
+        $$ = new FunctionExpressionNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), [], $6, false, false, createSourceLocation(null, @1, @7));
         }
     | "FUNCTION" "IDENTIFIER" "(" FormalParameterList ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionExpressionNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), $4, $7, false, false, createSourceLocation(null, @1, @8));
+        $$ = new FunctionExpressionNode(new IdentifierNode($2, createSourceLocation(null, @2, @2)), $4, $7, false, false, createSourceLocation(null, @1, @8));
         }
     | "FUNCTION" "(" ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionExpressionNode(null, [], $5, false, false, createSourceLocation(null, @1, @6));
+        $$ = new FunctionExpressionNode(null, [], $5, false, false, createSourceLocation(null, @1, @6));
         }
     | "FUNCTION" "(" FormalParameterList ")" "{" FunctionBody "}"
         {
-	    $$ = new FunctionExpressionNode(null, $3, $6, false, false, createSourceLocation(null, @1, @7));
+        $$ = new FunctionExpressionNode(null, $3, $6, false, false, createSourceLocation(null, @1, @7));
         }
     ;
 
@@ -1447,6 +1449,7 @@ Literal
     | NumericLiteral
     | StringLiteral
     | RegularExpressionLiteral
+    | ModelExpressionLiteral
     ;
 
 NullLiteral
@@ -1499,6 +1502,34 @@ RegularExpressionLiteralBegin
         }
     ;
 
+
+ModelExpressionLiteral
+    : "@M" StringLiteral
+        {      
+            $$=new ModelLiteralNode($2,null,createSourceLocation(null,@1,@2));
+        }
+    | "@M" StringLiteral WhereExpressionLiteral
+        {
+            $$=new ModelLiteralNode($2,$3,createSourceLocation(null,@1,@3));   
+        }   
+    ;
+
+WhereExpressionLiteral
+    : "@W" ModelExpressionLiteral DBOperator Literal
+        {
+            $$=new WhereLiteralNode($2,$3,$4,createSourceLocation(null,@1,@4));
+        }
+    ;
+
+DBOperator
+    : ">="
+    | "<="
+    | ">"
+    | "<"
+    | "="
+    ;
+
+
 ReservedWord
     : "BREAK"
     | "CASE"
@@ -1541,343 +1572,352 @@ ReservedWord
 %%
 
 function createSourceLocation(source, firstToken, lastToken) {
-	return new SourceLocation(source, new Position(firstToken.first_line, firstToken.first_column), new Position(lastToken.last_line, lastToken.last_column));
+    return new SourceLocation(source, new Position(firstToken.first_line, firstToken.first_column), new Position(lastToken.last_line, lastToken.last_column));
 }
 
 function parseRegularExpressionLiteral(literal) {
-	var last = literal.lastIndexOf("/");
-	var body = literal.substring(1, last);
-	var flags = literal.substring(last + 1);
+    var last = literal.lastIndexOf("/");
+    var body = literal.substring(1, last);
+    var flags = literal.substring(last + 1);
 
-	return new RegExp(body, flags);
+    return new RegExp(body, flags);
 }
 
 function parseNumericLiteral(literal) {
-	if (literal.charAt(0) === "0") {
-		if (literal.charAt(1).toLowerCase() === "x") {
-			return parseInt(literal, 16);
-		} else {
-			return parseInt(literal, 8);
-		}
-	} else {
-		return Number(literal);
-	}
+    if (literal.charAt(0) === "0") {
+        if (literal.charAt(1).toLowerCase() === "x") {
+            return parseInt(literal, 16);
+        } else {
+            return parseInt(literal, 8);
+        }
+    } else {
+        return Number(literal);
+    }
 }
 
 /* Begin Parser Customization Methods */
 var _originalParseMethod = parser.parse;
 
 parser.parse = function(source, args) {
-	parser.wasNewLine = false;
-	parser.newLine = false;
-	parser.restricted = false;
+    parser.wasNewLine = false;
+    parser.newLine = false;
+    parser.restricted = false;
 
-	return _originalParseMethod.call(this, source);
+    return _originalParseMethod.call(this, source);
 };
 
 parser.parseError = function(str, hash) {
-//		alert(JSON.stringify(hash) + "\n\n\n" + parser.newLine + "\n" + parser.wasNewLine + "\n\n" + hash.expected.indexOf("';'"));
-	if (!((hash.expected && hash.expected.indexOf("';'") >= 0) && (hash.token === "}" || hash.token === "EOF" || hash.token === "BR++" || hash.token === "BR--" || parser.newLine || parser.wasNewLine))) {
-		throw new SyntaxError(str);
-	}
+//      alert(JSON.stringify(hash) + "\n\n\n" + parser.newLine + "\n" + parser.wasNewLine + "\n\n" + hash.expected.indexOf("';'"));
+    if (!((hash.expected && hash.expected.indexOf("';'") >= 0) && (hash.token === "}" || hash.token === "EOF" || hash.token === "BR++" || hash.token === "BR--" || parser.newLine || parser.wasNewLine))) {
+        throw new SyntaxError(str);
+    }
 };
 /* End Parser Customization Methods */
 
 /* Begin AST Node Constructors */
 function ProgramNode(body, loc) {
-	this.type = "Program";
-	this.body = body;
-	this.loc = loc;
+    this.type = "Program";
+    this.body = body;
+    this.loc = loc;
 }
 
 function EmptyStatementNode(loc) {
-	this.type = "EmptyStatement";
-	this.loc = loc;
+    this.type = "EmptyStatement";
+    this.loc = loc;
 }
 
 function BlockStatementNode(body, loc) {
-	this.type = "BlockStatement";
-	this.body = body;
-	this.loc = loc;
+    this.type = "BlockStatement";
+    this.body = body;
+    this.loc = loc;
 }
 
 function ExpressionStatementNode(expression, loc) {
-	this.type = "ExpressionStatement";
-	this.expression = expression;
-	this.loc = loc;
+    this.type = "ExpressionStatement";
+    this.expression = expression;
+    this.loc = loc;
 }
 
 function IfStatementNode(test, consequent, alternate, loc) {
-	this.type = "IfStatement";
-	this.test = test;
-	this.consequent = consequent;
-	this.alternate = alternate;
-	this.loc = loc;
+    this.type = "IfStatement";
+    this.test = test;
+    this.consequent = consequent;
+    this.alternate = alternate;
+    this.loc = loc;
 }
 
 function LabeledStatementNode(label, body, loc) {
-	this.type = "LabeledStatement";
-	this.label = label;
-	this.body = body;
-	this.loc = loc;
+    this.type = "LabeledStatement";
+    this.label = label;
+    this.body = body;
+    this.loc = loc;
 }
 
 function BreakStatementNode(label, loc) {
-	this.type = "BreakStatement";
-	this.label = label;
-	this.loc = loc;
+    this.type = "BreakStatement";
+    this.label = label;
+    this.loc = loc;
 }
 
 function ContinueStatementNode(label, loc) {
-	this.type = "ContinueStatement";
-	this.label = label;
-	this.loc = loc;
+    this.type = "ContinueStatement";
+    this.label = label;
+    this.loc = loc;
 }
 
 function WithStatementNode(object, body, loc) {
-	this.type = "WithStatement";
-	this.object = object;
-	this.body = body;
-	this.loc = loc;
+    this.type = "WithStatement";
+    this.object = object;
+    this.body = body;
+    this.loc = loc;
 }
 
 function SwitchStatementNode(discriminant, cases, loc) {
-	this.type = "SwitchStatement";
-	this.discriminant = discriminant;
-	this.cases = cases;
-	this.loc = loc;
+    this.type = "SwitchStatement";
+    this.discriminant = discriminant;
+    this.cases = cases;
+    this.loc = loc;
 }
 
 function ReturnStatementNode(argument, loc) {
-	this.type = "ReturnStatement";
-	this.argument = argument;
-	this.loc = loc;
+    this.type = "ReturnStatement";
+    this.argument = argument;
+    this.loc = loc;
 }
 
 function ThrowStatementNode(argument, loc) {
-	this.type = "ThrowStatement";
-	this.argument = argument;
-	this.loc = loc;
+    this.type = "ThrowStatement";
+    this.argument = argument;
+    this.loc = loc;
 }
 
 function TryStatementNode(block, handlers, finalizer, loc) {
-	this.type = "TryStatement";
-	this.block = block;
-	this.handlers = handlers; // Multiple catch clauses are SpiderMonkey specific
-	this.finalizer = finalizer;
-	this.loc = loc;
+    this.type = "TryStatement";
+    this.block = block;
+    this.handlers = handlers; // Multiple catch clauses are SpiderMonkey specific
+    this.finalizer = finalizer;
+    this.loc = loc;
 }
 
 function WhileStatementNode(test, body, loc) {
-	this.type = "WhileStatement";
-	this.test = test;
-	this.body = body;
-	this.loc = loc;
+    this.type = "WhileStatement";
+    this.test = test;
+    this.body = body;
+    this.loc = loc;
 }
 
 function DoWhileStatementNode(body, test, loc) {
-	this.type = "DoWhileStatement";
-	this.body = body;
-	this.test = test;
-	this.loc = loc;
+    this.type = "DoWhileStatement";
+    this.body = body;
+    this.test = test;
+    this.loc = loc;
 }
 
 function ForStatementNode(init, test, update, body, loc) {
-	this.type = "ForStatement";
-	this.init = init;
-	this.test = test;
-	this.update = update;
-	this.body = body;
-	this.loc = loc;
+    this.type = "ForStatement";
+    this.init = init;
+    this.test = test;
+    this.update = update;
+    this.body = body;
+    this.loc = loc;
 }
 
 function ForInStatementNode(left, right, body, loc) {
-	this.type = "ForInStatement";
-	this.left = left;
-	this.right = right;
-	this.body = body;
-	this.loc = loc;
+    this.type = "ForInStatement";
+    this.left = left;
+    this.right = right;
+    this.body = body;
+    this.loc = loc;
 }
 
 function DebugggerStatementNode(loc) {
-	this.type = "DebuggerStatement";
-	this.loc = loc;
+    this.type = "DebuggerStatement";
+    this.loc = loc;
 }
 
 function FunctionDeclarationNode(id, params, body, generator, expression, loc) {
-	this.type = "FunctionDeclaration";
-	this.id = id;
-	this.params = params;
-	this.body = body;
-	this.generator = generator;
-	this.expression = expression;
-	this.loc = loc;
+    this.type = "FunctionDeclaration";
+    this.id = id;
+    this.params = params;
+    this.body = body;
+    this.generator = generator;
+    this.expression = expression;
+    this.loc = loc;
 }
 
 function VariableDeclarationNode(declarations, kind, loc) {
-	this.type = "VariableDeclaration";
-	this.declarations = declarations;
-	this.kind = kind;
-	this.loc = loc;
+    this.type = "VariableDeclaration";
+    this.declarations = declarations;
+    this.kind = kind;
+    this.loc = loc;
 }
 
 function VariableDeclaratorNode(id, init, loc) {
-	this.type = "VariableDeclarator";
-	this.id = id;
-	this.init = init;
-	this.loc = loc;
+    this.type = "VariableDeclarator";
+    this.id = id;
+    this.init = init;
+    this.loc = loc;
 }
 
 function ThisExpressionNode(loc) {
-	this.type = "ThisExpression";
-	this.loc = loc;
+    this.type = "ThisExpression";
+    this.loc = loc;
 }
 
 function ArrayExpressionNode(elements, loc) {
-	this.type = "ArrayExpression";
-	this.elements = elements;
-	this.loc = loc;
+    this.type = "ArrayExpression";
+    this.elements = elements;
+    this.loc = loc;
 }
 
 function ObjectExpressionNode(properties, loc) {
-	this.type = "ObjectExpression";
-	this.properties = properties;
-	this.loc = loc;
+    this.type = "ObjectExpression";
+    this.properties = properties;
+    this.loc = loc;
 }
 
 function FunctionExpressionNode(id, params, body, generator, expression, loc) {
-	this.type = "FunctionExpression";
-	this.id = id;
-	this.params = params;
-	this.body = body;
-	this.generator = generator;
-	this.expression = expression;
-	this.loc = loc;
+    this.type = "FunctionExpression";
+    this.id = id;
+    this.params = params;
+    this.body = body;
+    this.generator = generator;
+    this.expression = expression;
+    this.loc = loc;
 }
 
 function SequenceExpressionNode(expressions, loc) {
-	this.type = "SequenceExpression";
-	this.expressions = expressions;
-	this.loc = loc;
+    this.type = "SequenceExpression";
+    this.expressions = expressions;
+    this.loc = loc;
 }
 
 function UnaryExpressionNode(operator, prefix, argument, loc) {
-	this.type = "UnaryExpression";
-	this.operator = operator;
-	this.prefix = prefix;
-	this.argument = argument;
-	this.loc = loc;
+    this.type = "UnaryExpression";
+    this.operator = operator;
+    this.prefix = prefix;
+    this.argument = argument;
+    this.loc = loc;
 }
 
 function BinaryExpressionNode(operator, left, right, loc) {
-	this.type = "BinaryExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
-	this.loc = loc;
+    this.type = "BinaryExpression";
+    this.operator = operator;
+    this.left = left;
+    this.right = right;
+    this.loc = loc;
 }
 
 function AssignmentExpressionNode(operator, left, right, loc) {
-	this.type = "AssignmentExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
-	this.loc = loc;
+    this.type = "AssignmentExpression";
+    this.operator = operator;
+    this.left = left;
+    this.right = right;
+    this.loc = loc;
 }
 
 function UpdateExpressionNode(operator, argument, prefix, loc) {
-	this.type = "UpdateExpression";
-	this.operator = operator;
-	this.argument = argument;
-	this.prefix = prefix;
-	this.loc = loc;
+    this.type = "UpdateExpression";
+    this.operator = operator;
+    this.argument = argument;
+    this.prefix = prefix;
+    this.loc = loc;
 }
 
 function LogicalExpressionNode(operator, left, right, loc) {
-	this.type = "LogicalExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
-	this.loc = loc;
+    this.type = "LogicalExpression";
+    this.operator = operator;
+    this.left = left;
+    this.right = right;
+    this.loc = loc;
 }
 
 function ConditionalExpressionNode(test, consequent, alternate, loc) {
-	this.type = "ConditionalExpression";
-	this.test = test;
-	this.consequent = consequent;
-	this.alternate = alternate;
-	this.loc = loc;
+    this.type = "ConditionalExpression";
+    this.test = test;
+    this.consequent = consequent;
+    this.alternate = alternate;
+    this.loc = loc;
 }
 
 function NewExpressionNode(callee, args, loc) {
-	this.type = "NewExpression";
-	this.callee = callee;
-	this.arguments = args;
-	this.loc = loc;
+    this.type = "NewExpression";
+    this.callee = callee;
+    this.arguments = args;
+    this.loc = loc;
 }
 
 function CallExpressionNode(callee, args, loc) {
-	this.type = "CallExpression";
-	this.callee = callee;
-	this.arguments = args;
-	this.loc = loc;
+    this.type = "CallExpression";
+    this.callee = callee;
+    this.arguments = args;
+    this.loc = loc;
 }
 
 function MemberExpressionNode(object, property, computed, loc) {
-	this.type = "MemberExpression";
-	this.object = object;
-	this.property = property;
-	this.computed = computed;
-	this.loc = loc;
+    this.type = "MemberExpression";
+    this.object = object;
+    this.property = property;
+    this.computed = computed;
+    this.loc = loc;
 }
 
 function SwitchCaseNode(test, consequent, loc) {
-	this.type = "SwitchCase";
-	this.test = test;
-	this.consequent = consequent;
-	this.loc = loc;
+    this.type = "SwitchCase";
+    this.test = test;
+    this.consequent = consequent;
+    this.loc = loc;
 }
 
 function CatchClauseNode(param, body, loc) {
-	this.type = "CatchClause";
-	this.param = param;
-	this.guard = null; /* Firefox specific */
-	this.body = body;
-	this.loc = loc;
+    this.type = "CatchClause";
+    this.param = param;
+    this.guard = null; /* Firefox specific */
+    this.body = body;
+    this.loc = loc;
 }
 
 function IdentifierNode(name, loc) {
-	this.type = "Identifier";
-	this.name = name;
-	this.loc = loc;
+    this.type = "Identifier";
+    this.name = name;
+    this.loc = loc;
 }
 
 function LiteralNode(value, loc) {
-	this.type = "Literal";
-	this.value = value;
-	this.loc = loc;
+    this.type = "Literal";
+    this.value = value;
+    this.loc = loc;
 }
 
+function ModelLiteralNode(modelProperty,filter,loc){
+    this.modelProperty=modelProperty;
+    this.filter=filter;
+}
+function WhereLiteralNode(modelProperty,operator,literal){
+    this.modelProperty=modelProperty;
+    this.operator=operator;
+    this.literal=literal;
+}
 function SourceLocation(source, start, end) {
-	this.source = source;
-	this.start = start;
-	this.end = end;
+    this.source = source;
+    this.start = start;
+    this.end = end;
 }
 
 function Position(line, column) {
-	this.line = line;
-	this.column = column;
+    this.line = line;
+    this.column = column;
 }
 
 /* Object and Array patterns are not part of the ECMAScript Standard
 function ObjectPatternNode() {
-	this.type = "ObjectPattern";
-	this.properties = [];
+    this.type = "ObjectPattern";
+    this.properties = [];
 }
 
 function ArrayPatternNode() {
-	this.type = "ArrayPattern";
-	this.elements = [];
+    this.type = "ArrayPattern";
+    this.elements = [];
 }
 */
 /* End AST Node Constructors */
@@ -1923,3 +1963,5 @@ parser.ast.SwitchCaseNode = SwitchCaseNode;
 parser.ast.CatchClauseNode = CatchClauseNode;
 parser.ast.IdentifierNode = IdentifierNode;
 parser.ast.LiteralNode = LiteralNode;
+parser.ast.ModelLiteralNode=ModelLiteralNode;
+parser.ast.WhereLiteralNode=WhereLiteralNode;
